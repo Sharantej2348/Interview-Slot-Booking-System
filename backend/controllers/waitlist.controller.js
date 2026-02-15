@@ -1,15 +1,15 @@
 import {
-    createSlotService,
-    getAllSlotsService,
-} from "../services/slot.service.js";
+    joinWaitlistService,
+    getWaitlistBySlotService,
+} from "../services/waitlist.service.js";
 
-export const createSlot = async (req, res) => {
+export const joinWaitlist = async (req, res) => {
     try {
-        const slot = await createSlotService(req.body);
+        const result = await joinWaitlistService(req.body);
 
         res.status(201).json({
             success: true,
-            data: slot,
+            data: result,
         });
     } catch (error) {
         res.status(400).json({
@@ -19,13 +19,15 @@ export const createSlot = async (req, res) => {
     }
 };
 
-export const getAllSlots = async (req, res) => {
+export const getWaitlistBySlot = async (req, res) => {
     try {
-        const slots = await getAllSlotsService();
+        const { slotId } = req.params;
+
+        const waitlist = await getWaitlistBySlotService(slotId);
 
         res.status(200).json({
             success: true,
-            data: slots,
+            data: waitlist,
         });
     } catch (error) {
         res.status(500).json({

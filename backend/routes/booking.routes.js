@@ -1,9 +1,15 @@
 import express from "express";
-import { createBooking, cancelBooking } from "../controllers/booking.controller.js";
+import {
+    createBooking,
+    cancelBooking,
+    getBookingsByCandidate,
+} from "../controllers/booking.controller.js";
+import { checkRole } from "../middlewares/role.middleware.js";
 
 const router = express.Router();
 
-router.post("/", createBooking);
-router.post("/cancel", cancelBooking);
+router.post("/", checkRole(["candidate"]), createBooking);
+router.post("/cancel", checkRole(["candidate"]), cancelBooking);
+router.get("/", getBookingsByCandidate);
 
 export default router;
