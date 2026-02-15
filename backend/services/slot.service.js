@@ -70,3 +70,36 @@ export const getAllSlotsService = async () => {
 
     return result.rows;
 };
+
+export const deleteSlotService = async (slotId) => {
+    const client = await pool.connect();
+
+    try {
+        await client.query("BEGIN");
+
+        // Check if slot exists
+        const slot = await client.query(`SELECT id FROM slots WHERE id = $1`, [
+            slotId,
+        ]);
+
+        if (slot.rows.length === 0) {
+            throw new Error("Slot not found");
+        }
+
+        // Delete related bookings first
+        await client.query(`DELETE FROM bookings WHERE slot_id = $1`, [slotId]);
+
+        // Delete waitlist entries
+        await client.query(`DELETE FROM waitlist WHERE slot_id = $1`, [slotId]);
+
+        // Delete slot
+        await client.query(`DELETE FROM slots WHERE id = $1`, [slotId]);
+
+        await client.query("COMMIT");
+    } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+    } finally {
+        client.release();
+    }
+};

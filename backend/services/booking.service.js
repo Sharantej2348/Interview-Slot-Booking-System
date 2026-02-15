@@ -11,54 +11,48 @@ export const createBookingService = async ({
     try {
         await client.query("BEGIN");
 
-        // 1️⃣ Idempotency check
-        if (idempotencyKey) {
-            const existing = await client.query(
-                "SELECT * FROM bookings WHERE idempotency_key = $1",
-                [idempotencyKey],
-            );
+        // Check duplicate booking
+        const existing = await client.query(
+            `SELECT 1 FROM bookings
+             WHERE slot_id=$1 AND candidate_id=$2`,
+            [slotId, candidateId],
+        );
 
-            if (existing.rows.length > 0) {
-                await client.query("COMMIT");
-                return existing.rows[0];
-            }
+        if (existing.rows.length > 0) {
+            throw new Error("ALREADY_BOOKED");
         }
 
-        // 2️⃣ Lock slot row
-        const slotRes = await client.query(
-            "SELECT * FROM slots WHERE id = $1 FOR UPDATE",
+        // Check slot availability
+        const slot = await client.query(
+            `SELECT capacity, booked_count
+             FROM slots WHERE id=$1 FOR UPDATE`,
             [slotId],
         );
 
-        if (slotRes.rows.length === 0) {
+        if (slot.rows.length === 0) {
             throw new Error("Slot not found");
         }
 
-        const slot = slotRes.rows[0];
+        const { capacity, booked_count } = slot.rows[0];
 
-        // 3️⃣ Capacity check
-        if (slot.booked_count >= slot.capacity) {
-            throw new Error("Slot is full");
+        if (booked_count >= capacity) {
+            throw new Error("SLOT_FULL");
         }
 
-        // 4️⃣ Insert booking
+        // Create booking
         const booking = await client.query(
-            `
-      INSERT INTO bookings
-      (id, slot_id, candidate_id, status, idempotency_key)
-      VALUES ($1, $2, $3, 'confirmed', $4)
-      RETURNING *
-      `,
-            [uuidv4(), slotId, candidateId, idempotencyKey || null],
+            `INSERT INTO bookings
+            (id, slot_id, candidate_id, idempotency_key)
+            VALUES ($1,$2,$3,$4)
+            RETURNING *`,
+            [uuidv4(), slotId, candidateId, idempotencyKey],
         );
 
-        // 5️⃣ Update slot count
+        // Update slot count
         await client.query(
-            `
-      UPDATE slots
-      SET booked_count = booked_count + 1
-      WHERE id = $1
-      `,
+            `UPDATE slots
+             SET booked_count = booked_count + 1
+             WHERE id=$1`,
             [slotId],
         );
 
@@ -73,99 +67,33 @@ export const createBookingService = async ({
     }
 };
 
-export const cancelBookingService = async ({ slotId, candidateId }) => {
+export const cancelBookingService = async (bookingId) => {
     const client = await pool.connect();
 
     try {
         await client.query("BEGIN");
 
-        // 1️⃣ Lock slot row
-        const slotRes = await client.query(
-            "SELECT * FROM slots WHERE id = $1 FOR UPDATE",
-            [slotId],
+        const booking = await client.query(
+            `DELETE FROM bookings
+             WHERE id=$1
+             RETURNING slot_id`,
+            [bookingId],
         );
 
-        if (slotRes.rows.length === 0) {
-            throw new Error("Slot not found");
+        if (booking.rows.length === 0) {
+            throw new Error("Booking not found");
         }
 
-        // 2️⃣ Mark booking cancelled
-        const bookingRes = await client.query(
-            `
-      UPDATE bookings
-      SET status = 'cancelled'
-      WHERE slot_id = $1 AND candidate_id = $2 AND status = 'confirmed'
-      RETURNING *
-      `,
-            [slotId, candidateId],
-        );
+        const slotId = booking.rows[0].slot_id;
 
-        if (bookingRes.rows.length === 0) {
-            throw new Error("Confirmed booking not found");
-        }
-
-        // 3️⃣ Decrement seat count
         await client.query(
-            `
-      UPDATE slots
-      SET booked_count = booked_count - 1
-      WHERE id = $1
-      `,
+            `UPDATE slots
+             SET booked_count = booked_count - 1
+             WHERE id=$1`,
             [slotId],
         );
-
-        // 4️⃣ Check waitlist
-        const waitlistRes = await client.query(
-            `
-      SELECT * FROM waitlist
-      WHERE slot_id = $1
-      ORDER BY created_at ASC
-      LIMIT 1
-      FOR UPDATE
-      `,
-            [slotId],
-        );
-
-        let promoted = null;
-
-        if (waitlistRes.rows.length > 0) {
-            const nextCandidate = waitlistRes.rows[0];
-
-            // Promote candidate
-            const newBooking = await client.query(
-                `
-        INSERT INTO bookings
-        (id, slot_id, candidate_id, status)
-        VALUES ($1, $2, $3, 'confirmed')
-        RETURNING *
-        `,
-                [uuidv4(), slotId, nextCandidate.candidate_id],
-            );
-
-            // Remove from waitlist
-            await client.query("DELETE FROM waitlist WHERE id = $1", [
-                nextCandidate.id,
-            ]);
-
-            // Increment seat count again
-            await client.query(
-                `
-        UPDATE slots
-        SET booked_count = booked_count + 1
-        WHERE id = $1
-        `,
-                [slotId],
-            );
-
-            promoted = newBooking.rows[0];
-        }
 
         await client.query("COMMIT");
-
-        return {
-            cancelled: bookingRes.rows[0],
-            promoted,
-        };
     } catch (error) {
         await client.query("ROLLBACK");
         throw error;
@@ -177,19 +105,15 @@ export const cancelBookingService = async ({ slotId, candidateId }) => {
 export const getBookingsByCandidateService = async (candidateId) => {
     const result = await pool.query(
         `
-    SELECT 
-      b.id,
-      b.slot_id,
-      b.candidate_id,
-      b.status,
-      s.start_time,
-      s.end_time,
-      s.role
-    FROM bookings b
-    JOIN slots s ON b.slot_id = s.id
-    WHERE b.candidate_id = $1
-    ORDER BY s.start_time ASC
-    `,
+        SELECT b.id,
+               s.role,
+               s.start_time,
+               s.end_time
+        FROM bookings b
+        JOIN slots s ON b.slot_id = s.id
+        WHERE b.candidate_id=$1
+        ORDER BY s.start_time
+        `,
         [candidateId],
     );
 

@@ -34,3 +34,23 @@ export const getAllSlots = async (req, res) => {
         });
     }
 };
+
+import { deleteSlotService } from "../services/slot.service.js";
+
+export const deleteSlot = async (req, res) => {
+    try {
+        const { slotId } = req.params;
+
+        await deleteSlotService(slotId);
+
+        res.json({
+            success: true,
+            message: "Slot deleted successfully",
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: error.message,
+        });
+    }
+};
