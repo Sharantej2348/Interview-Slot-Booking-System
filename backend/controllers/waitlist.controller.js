@@ -5,7 +5,21 @@ import {
 
 export const joinWaitlist = async (req, res) => {
     try {
-        const result = await joinWaitlistService(req.body);
+        const candidateId = req.user.userId;
+
+        const { slotId } = req.body;
+
+        if (!slotId) {
+            return res.status(400).json({
+                success: false,
+                message: "SlotId required",
+            });
+        }
+
+        const result = await joinWaitlistService({
+            slotId,
+            candidateId,
+        });
 
         res.status(201).json({
             success: true,
@@ -25,7 +39,7 @@ export const getWaitlistBySlot = async (req, res) => {
 
         const waitlist = await getWaitlistBySlotService(slotId);
 
-        res.status(200).json({
+        res.json({
             success: true,
             data: waitlist,
         });

@@ -1,11 +1,29 @@
 import {
     createSlotService,
     getAllSlotsService,
+    deleteSlotService,
 } from "../services/slot.service.js";
 
 export const createSlot = async (req, res) => {
     try {
-        const slot = await createSlotService(req.body);
+        const interviewerId = req.user.userId;
+
+        const { role, startTime, endTime, capacity } = req.body;
+
+        if (!role || !startTime || !endTime || !capacity) {
+            return res.status(400).json({
+                success: false,
+                message: "Missing required fields",
+            });
+        }
+
+        const slot = await createSlotService({
+            interviewerId,
+            role,
+            startTime,
+            endTime,
+            capacity,
+        });
 
         res.status(201).json({
             success: true,
@@ -23,7 +41,7 @@ export const getAllSlots = async (req, res) => {
     try {
         const slots = await getAllSlotsService();
 
-        res.status(200).json({
+        res.json({
             success: true,
             data: slots,
         });
@@ -35,20 +53,20 @@ export const getAllSlots = async (req, res) => {
     }
 };
 
-import { deleteSlotService } from "../services/slot.service.js";
-
 export const deleteSlot = async (req, res) => {
     try {
         const { slotId } = req.params;
 
-        await deleteSlotService(slotId);
+        const recruiterId = req.user.userId;
+
+        await deleteSlotService(slotId, recruiterId);
 
         res.json({
             success: true,
             message: "Slot deleted successfully",
         });
     } catch (error) {
-        res.status(500).json({
+        res.status(400).json({
             success: false,
             message: error.message,
         });

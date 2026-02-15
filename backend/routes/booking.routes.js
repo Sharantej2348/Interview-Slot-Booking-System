@@ -1,25 +1,39 @@
 import express from "express";
+
 import {
     createBooking,
     cancelBooking,
-    getBookingsByCandidate,
+    getMyBookings,
 } from "../controllers/booking.controller.js";
 
-import { checkRole } from "../middlewares/role.middleware.js";
+import { authenticate } from "../middlewares/auth.middleware.js";
+import { authorize } from "../middlewares/role.middleware.js";
 
 const router = express.Router();
 
-// Create booking
-router.post("/", checkRole(["candidate"]), createBooking);
+/*
+Candidate only routes
+*/
 
-// Cancel booking
-router.delete("/:bookingId", checkRole(["candidate"]), cancelBooking);
+router.post(
+    "/",
+    authenticate,
+    authorize(["candidate"]),
+    createBooking
+);
 
-// Get candidate bookings
+router.delete(
+    "/:bookingId",
+    authenticate,
+    authorize(["candidate"]),
+    cancelBooking
+);
+
 router.get(
-    "/candidate/:candidateId",
-    checkRole(["candidate"]),
-    getBookingsByCandidate,
+    "/my-bookings",
+    authenticate,
+    authorize(["candidate"]),
+    getMyBookings
 );
 
 export default router;

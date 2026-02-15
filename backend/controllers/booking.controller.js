@@ -4,11 +4,17 @@ import {
     getBookingsByCandidateService,
 } from "../services/booking.service.js";
 
+/*
+Create Booking
+Candidate ID comes from JWT
+*/
 export const createBooking = async (req, res) => {
     try {
-        const { slotId, candidateId, idempotencyKey } = req.body;
+        const { slotId, idempotencyKey } = req.body;
 
-        if (!slotId || !candidateId || !idempotencyKey) {
+        const candidateId = req.user.userId;
+
+        if (!slotId || !idempotencyKey) {
             return res.status(400).json({
                 success: false,
                 message: "Missing required fields",
@@ -36,7 +42,7 @@ export const createBooking = async (req, res) => {
         if (error.message === "SLOT_FULL") {
             return res.status(409).json({
                 success: false,
-                message: "Slot full",
+                message: "Slot is full",
             });
         }
 
@@ -47,6 +53,9 @@ export const createBooking = async (req, res) => {
     }
 };
 
+/*
+Cancel Booking
+*/
 export const cancelBooking = async (req, res) => {
     try {
         const { bookingId } = req.params;
@@ -55,7 +64,7 @@ export const cancelBooking = async (req, res) => {
 
         res.json({
             success: true,
-            message: "Booking cancelled",
+            message: "Booking cancelled successfully",
         });
     } catch (error) {
         res.status(500).json({
@@ -65,9 +74,13 @@ export const cancelBooking = async (req, res) => {
     }
 };
 
-export const getBookingsByCandidate = async (req, res) => {
+/*
+Get My Bookings
+Candidate ID comes from JWT
+*/
+export const getMyBookings = async (req, res) => {
     try {
-        const { candidateId } = req.params;
+        const candidateId = req.user.userId;
 
         const bookings = await getBookingsByCandidateService(candidateId);
 

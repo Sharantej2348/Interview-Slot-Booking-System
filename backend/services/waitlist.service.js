@@ -7,9 +7,15 @@ export const joinWaitlistService = async ({ slotId, candidateId }) => {
     try {
         await client.query("BEGIN");
 
-        // Step 1: Check slot exists
+        /*
+        Check slot exists
+        */
         const slotResult = await client.query(
-            "SELECT * FROM slots WHERE id = $1",
+            `
+            SELECT capacity, booked_count
+            FROM slots
+            WHERE id=$1
+            `,
             [slotId],
         );
 
@@ -17,51 +23,64 @@ export const joinWaitlistService = async ({ slotId, candidateId }) => {
             throw new Error("Slot not found");
         }
 
-        // Step 2: Check already booked
+        /*
+        Check already booked
+        */
         const bookingCheck = await client.query(
             `
-      SELECT * FROM bookings
-      WHERE slot_id = $1
-      AND candidate_id = $2
-      AND status = 'confirmed'
-      `,
+            SELECT id
+            FROM bookings
+            WHERE slot_id=$1
+            AND candidate_id=$2
+            `,
             [slotId, candidateId],
         );
 
         if (bookingCheck.rows.length > 0) {
-            throw new Error("Candidate already booked");
+            throw new Error("Already booked");
         }
 
-        // Step 3: Check already in waitlist
+        /*
+        Check already waitlisted
+        */
         const waitlistCheck = await client.query(
             `
-      SELECT * FROM waitlist
-      WHERE slot_id = $1
-      AND candidate_id = $2
-      `,
+            SELECT id
+            FROM waitlist
+            WHERE slot_id=$1
+            AND candidate_id=$2
+            `,
             [slotId, candidateId],
         );
 
         if (waitlistCheck.rows.length > 0) {
-            throw new Error("Candidate already in waitlist");
+            throw new Error("Already in waitlist");
         }
 
-        // Step 4: Insert into waitlist
-        const waitlistEntry = await client.query(
+        /*
+        Insert waitlist entry
+        */
+        const result = await client.query(
             `
-      INSERT INTO waitlist
-      (id, slot_id, candidate_id)
-      VALUES ($1, $2, $3)
-      RETURNING *
-      `,
+            INSERT INTO waitlist
+            (
+                id,
+                slot_id,
+                candidate_id,
+                created_at
+            )
+            VALUES ($1,$2,$3,NOW())
+            RETURNING *
+            `,
             [uuidv4(), slotId, candidateId],
         );
 
         await client.query("COMMIT");
 
-        return waitlistEntry.rows[0];
+        return result.rows[0];
     } catch (error) {
         await client.query("ROLLBACK");
+
         throw error;
     } finally {
         client.release();
@@ -71,17 +90,80 @@ export const joinWaitlistService = async ({ slotId, candidateId }) => {
 export const getWaitlistBySlotService = async (slotId) => {
     const result = await pool.query(
         `
-    SELECT 
-      id,
-      slot_id,
-      candidate_id,
-      created_at
-    FROM waitlist
-    WHERE slot_id = $1
-    ORDER BY created_at ASC
-    `,
+        SELECT
+            id,
+            slot_id,
+            candidate_id,
+            created_at
+        FROM waitlist
+        WHERE slot_id=$1
+        ORDER BY created_at ASC
+        `,
         [slotId],
     );
 
     return result.rows;
+};
+
+export const promoteFromWaitlistService = async (slotId, client) => {
+    /*
+    Get first waitlisted candidate
+    */
+    const waitlist = await client.query(
+        `
+        SELECT id, candidate_id
+        FROM waitlist
+        WHERE slot_id=$1
+        ORDER BY created_at ASC
+        LIMIT 1
+        FOR UPDATE
+        `,
+        [slotId],
+    );
+
+    if (waitlist.rows.length === 0) return;
+
+    const candidateId = waitlist.rows[0].candidate_id;
+    const waitlistId = waitlist.rows[0].id;
+
+    /*
+    Create booking
+    */
+    await client.query(
+        `
+        INSERT INTO bookings
+        (
+            id,
+            slot_id,
+            candidate_id,
+            status,
+            created_at
+        )
+        VALUES ($1,$2,$3,'confirmed',NOW())
+        `,
+        [uuidv4(), slotId, candidateId],
+    );
+
+    /*
+    Remove from waitlist
+    */
+    await client.query(
+        `
+        DELETE FROM waitlist
+        WHERE id=$1
+        `,
+        [waitlistId],
+    );
+
+    /*
+    Update slot count
+    */
+    await client.query(
+        `
+        UPDATE slots
+        SET booked_count = booked_count + 1
+        WHERE id=$1
+        `,
+        [slotId],
+    );
 };
