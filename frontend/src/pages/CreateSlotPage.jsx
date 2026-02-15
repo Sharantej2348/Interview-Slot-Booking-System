@@ -1,124 +1,167 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api/axios";
+import { toast } from "react-toastify";
+import Loader from "../components/Loader";
+import { useAuth } from "../context/AuthContext";
 
 function CreateSlotPage() {
+    const navigate = useNavigate();
 
-  const navigate = useNavigate();
+    const { user } = useAuth();
 
-  const [form, setForm] = useState({
-    interviewerId: "",
-    role: "",
-    startTime: "",
-    endTime: "",
-    capacity: ""
-  });
+    const [loading, setLoading] = useState(false);
 
-  const handleChange = (e) => {
-    setForm({
-      ...form,
-      [e.target.name]: e.target.value
+    const [formData, setFormData] = useState({
+        interviewerId: user?.id || "",
+        role: "",
+        startTime: "",
+        endTime: "",
+        capacity: "",
     });
-  };
 
-  const handleSubmit = async (e) => {
+    const handleChange = (e) => {
+        const { name, value } = e.target;
 
-    e.preventDefault();
+        setFormData((prev) => ({
+            ...prev,
+            [name]: value,
+        }));
+    };
 
-    try {
+    const handleSubmit = async (e) => {
+        e.preventDefault();
 
-      await api.post(
-        "/slots",
-        {
-          interviewerId: form.interviewerId,
-          role: form.role,
-          startTime: form.startTime,
-          endTime: form.endTime,
-          capacity: Number(form.capacity)
-        },
-        {
-          headers: {
-            role: "recruiter"
-          }
+        if (
+            !formData.role ||
+            !formData.startTime ||
+            !formData.endTime ||
+            !formData.capacity
+        ) {
+            toast.error("Please fill all fields");
+
+            return;
         }
-      );
 
-      alert("Slot created successfully");
+        try {
+            setLoading(true);
 
-      navigate("/recruiter-dashboard");
+            await api.post("/slots", {
+                interviewerId: formData.interviewerId,
+                role: formData.role,
+                startTime: formData.startTime,
+                endTime: formData.endTime,
+                capacity: Number(formData.capacity),
+            });
 
-    } catch (err) {
+            toast.success("Slot created successfully");
 
-      alert(err.response?.data?.message || "Error creating slot");
+            navigate("/recruiter-dashboard");
+        } catch (err) {
+            toast.error(err.response?.data?.message || "Failed to create slot");
+        } finally {
+            setLoading(false);
+        }
+    };
 
+    if (loading) {
+        return <Loader />;
     }
-  };
 
-  return (
+    return (
+        <div className="min-h-screen bg-gray-100 flex justify-center items-center">
+            <div className="bg-white p-8 rounded shadow w-full max-w-md">
+                <h2 className="text-2xl font-bold mb-6 text-center">
+                    Create Interview Slot
+                </h2>
 
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
+                <form onSubmit={handleSubmit} className="space-y-4">
+                    {/* Role */}
+                    <div>
+                        <label className="block text-gray-700 mb-1">Role</label>
 
-      <form
-        onSubmit={handleSubmit}
-        className="bg-white p-8 rounded shadow w-96"
-      >
+                        <input
+                            type="text"
+                            name="role"
+                            value={formData.role}
+                            onChange={handleChange}
+                            placeholder="Enter role (e.g., SDE)"
+                            className="w-full border p-2 rounded"
+                            required
+                        />
+                    </div>
 
-        <h2 className="text-2xl font-bold mb-6">
-          Create Interview Slot
-        </h2>
+                    {/* Start Time */}
+                    <div>
+                        <label className="block text-gray-700 mb-1">
+                            Start Time
+                        </label>
 
-        <input
-          name="interviewerId"
-          placeholder="Interviewer ID"
-          onChange={handleChange}
-          className="w-full mb-4 p-2 border rounded"
-          required
-        />
+                        <input
+                            type="datetime-local"
+                            name="startTime"
+                            value={formData.startTime}
+                            onChange={handleChange}
+                            className="w-full border p-2 rounded"
+                            required
+                        />
+                    </div>
 
-        <input
-          name="role"
-          placeholder="Role"
-          onChange={handleChange}
-          className="w-full mb-4 p-2 border rounded"
-          required
-        />
+                    {/* End Time */}
+                    <div>
+                        <label className="block text-gray-700 mb-1">
+                            End Time
+                        </label>
 
-        <input
-          type="datetime-local"
-          name="startTime"
-          onChange={handleChange}
-          className="w-full mb-4 p-2 border rounded"
-          required
-        />
+                        <input
+                            type="datetime-local"
+                            name="endTime"
+                            value={formData.endTime}
+                            onChange={handleChange}
+                            className="w-full border p-2 rounded"
+                            required
+                        />
+                    </div>
 
-        <input
-          type="datetime-local"
-          name="endTime"
-          onChange={handleChange}
-          className="w-full mb-4 p-2 border rounded"
-          required
-        />
+                    {/* Capacity */}
+                    <div>
+                        <label className="block text-gray-700 mb-1">
+                            Capacity
+                        </label>
 
-        <input
-          type="number"
-          name="capacity"
-          placeholder="Capacity"
-          onChange={handleChange}
-          className="w-full mb-4 p-2 border rounded"
-          required
-        />
+                        <input
+                            type="number"
+                            name="capacity"
+                            value={formData.capacity}
+                            onChange={handleChange}
+                            placeholder="Enter capacity"
+                            className="w-full border p-2 rounded"
+                            min="1"
+                            required
+                        />
+                    </div>
 
-        <button
-          type="submit"
-          className="w-full bg-blue-600 text-white p-2 rounded hover:bg-blue-700"
-        >
-          Create Slot
-        </button>
+                    {/* Buttons */}
+                    <div className="flex gap-3">
+                        <button
+                            type="submit"
+                            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded"
+                        >
+                            Create Slot
+                        </button>
 
-      </form>
-
-    </div>
-  );
+                        <button
+                            type="button"
+                            onClick={() => navigate("/recruiter-dashboard")}
+                            className="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-2 rounded"
+                        >
+                            Cancel
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
 }
 
 export default CreateSlotPage;

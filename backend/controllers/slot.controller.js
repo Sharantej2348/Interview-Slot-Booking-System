@@ -55,6 +55,7 @@ export const getAllSlots = async (req, res) => {
 
 export const deleteSlot = async (req, res) => {
     try {
+
         const { slotId } = req.params;
 
         const recruiterId = req.user.userId;
@@ -65,10 +66,15 @@ export const deleteSlot = async (req, res) => {
             success: true,
             message: "Slot deleted successfully",
         });
+
     } catch (error) {
+
+        console.error("DELETE SLOT ERROR:", error.message);
+
         res.status(400).json({
             success: false,
             message: error.message,
         });
     }
 };
+

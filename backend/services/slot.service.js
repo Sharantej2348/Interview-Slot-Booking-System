@@ -94,61 +94,41 @@ export const deleteSlotService = async (slotId, recruiterId) => {
         await client.query("BEGIN");
 
         /*
-        Verify slot ownership
+        Verify slot exists AND belongs to recruiter
         */
-        const slot = await client.query(
+        const slotResult = await client.query(
             `
-            SELECT interviewer_id
+            SELECT id
             FROM slots
-            WHERE id=$1
+            WHERE id = $1
+            AND interviewer_id = $2
             `,
-            [slotId],
+            [slotId, recruiterId],
         );
 
-        if (slot.rows.length === 0) {
-            throw new Error("Slot not found");
-        }
-
-        if (slot.rows[0].interviewer_id !== recruiterId) {
+        if (slotResult.rows.length === 0) {
             throw new Error("Unauthorized");
         }
 
         /*
-        Delete related bookings
+        Delete bookings
         */
-        await client.query(
-            `
-            DELETE FROM bookings
-            WHERE slot_id=$1
-            `,
-            [slotId],
-        );
+        await client.query("DELETE FROM bookings WHERE slot_id = $1", [slotId]);
 
         /*
         Delete waitlist
         */
-        await client.query(
-            `
-            DELETE FROM waitlist
-            WHERE slot_id=$1
-            `,
-            [slotId],
-        );
+        await client.query("DELETE FROM waitlist WHERE slot_id = $1", [slotId]);
 
         /*
         Delete slot
         */
-        await client.query(
-            `
-            DELETE FROM slots
-            WHERE id=$1
-            `,
-            [slotId],
-        );
+        await client.query("DELETE FROM slots WHERE id = $1", [slotId]);
 
         await client.query("COMMIT");
     } catch (error) {
         await client.query("ROLLBACK");
+
         throw error;
     } finally {
         client.release();

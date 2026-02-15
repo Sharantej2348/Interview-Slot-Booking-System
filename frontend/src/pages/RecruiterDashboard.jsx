@@ -1,9 +1,14 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api/axios";
+import { toast } from "react-toastify";
+import Loader from "../components/Loader";
+import { useAuth } from "../context/AuthContext";
 
 function RecruiterDashboard() {
     const navigate = useNavigate();
+
+    const { user, logout } = useAuth();
 
     const [slots, setSlots] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -15,16 +20,19 @@ function RecruiterDashboard() {
 
     const fetchSlots = async () => {
         try {
+            setLoading(true);
+
             const res = await api.get("/slots");
 
             if (res.data.success) {
                 setSlots(res.data.data);
             } else {
-                setSlots([]);
+                toast.error("Failed to load slots");
             }
         } catch (err) {
             console.error(err);
-            alert("Failed to load slots");
+
+            toast.error(err.response?.data?.message || "Failed to fetch slots");
         } finally {
             setLoading(false);
         }
@@ -38,20 +46,18 @@ function RecruiterDashboard() {
 
             await api.delete(`/slots/${slotId}`);
 
-            // Remove slot from state safely
             setSlots((prev) => prev.filter((slot) => slot.id !== slotId));
 
-            alert("Slot deleted successfully");
+            toast.success("Slot deleted successfully");
         } catch (err) {
             console.error(err);
 
-            alert(err.response?.data?.message || "Delete failed");
+            toast.error(err.response?.data?.message || "Delete failed");
         } finally {
             setDeletingId(null);
         }
     };
 
-    // Safe stat calculations
     const totalSlots = slots.length;
 
     const totalBookings = slots.reduce(
@@ -66,18 +72,14 @@ function RecruiterDashboard() {
     );
 
     if (loading) {
-        return (
-            <div className="min-h-screen flex justify-center items-center">
-                <p className="text-xl font-semibold">Loading dashboard...</p>
-            </div>
-        );
+        return <Loader />;
     }
 
     return (
-        <div className="min-h-screen bg-gray-100 p-8">
+        <div className="min-h-screen bg-gray-100">
             {/* Header */}
-            <div className="flex justify-between items-center mb-8">
-                <h1 className="text-3xl font-bold">Recruiter Dashboard</h1>
+            <div className="bg-white shadow p-4 flex justify-between items-center">
+                <h1 className="text-2xl font-bold">Recruiter Dashboard</h1>
 
                 <div className="flex gap-3">
                     <button
@@ -88,114 +90,131 @@ function RecruiterDashboard() {
                     </button>
 
                     <button
-                        onClick={() => {
-                            localStorage.clear();
-                            navigate("/");
-                        }}
+                        onClick={logout}
                         className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded"
                     >
-                        Switch Role
+                        Logout
                     </button>
                 </div>
             </div>
 
-            {/* Stats */}
-            <div className="grid grid-cols-3 gap-6 mb-8">
-                <div className="bg-white p-6 rounded shadow">
-                    <p className="text-gray-500">Total Slots</p>
+            {/* Welcome */}
+            <div className="p-6">
+                <h2 className="text-lg font-semibold mb-6">
+                    Welcome, {user?.email}
+                </h2>
 
-                    <p className="text-2xl font-bold">{totalSlots}</p>
+                {/* Stats */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                    <div className="bg-white p-6 rounded shadow">
+                        <p className="text-gray-500">Total Slots</p>
+                        <p className="text-2xl font-bold">{totalSlots}</p>
+                    </div>
+
+                    <div className="bg-white p-6 rounded shadow">
+                        <p className="text-gray-500">Total Bookings</p>
+                        <p className="text-2xl font-bold text-green-600">
+                            {totalBookings}
+                        </p>
+                    </div>
+
+                    <div className="bg-white p-6 rounded shadow">
+                        <p className="text-gray-500">Available Seats</p>
+                        <p className="text-2xl font-bold text-purple-600">
+                            {availableSeats}
+                        </p>
+                    </div>
                 </div>
 
-                <div className="bg-white p-6 rounded shadow">
-                    <p className="text-gray-500">Total Bookings</p>
+                {/* Slots Table */}
+                <div className="bg-white rounded shadow p-6">
+                    <h2 className="text-xl font-bold mb-4">All Slots</h2>
 
-                    <p className="text-2xl font-bold text-green-600">
-                        {totalBookings}
-                    </p>
-                </div>
+                    {slots.length === 0 ? (
+                        <p className="text-gray-500">No slots created yet</p>
+                    ) : (
+                        <table className="w-full">
+                            <thead>
+                                <tr className="border-b text-left">
+                                    <th className="py-3">Role</th>
 
-                <div className="bg-white p-6 rounded shadow">
-                    <p className="text-gray-500">Available Seats</p>
+                                    <th className="py-3">Start</th>
 
-                    <p className="text-2xl font-bold text-purple-600">
-                        {availableSeats}
-                    </p>
-                </div>
-            </div>
+                                    <th className="py-3">End</th>
 
-            {/* Slots Table */}
-            <div className="bg-white rounded shadow p-6">
-                <h2 className="text-xl font-bold mb-4">All Slots</h2>
+                                    <th className="py-3">Capacity</th>
 
-                {slots.length === 0 ? (
-                    <p>No slots found</p>
-                ) : (
-                    <table className="w-full">
-                        <thead>
-                            <tr className="border-b">
-                                <th className="py-2 text-left">Role</th>
+                                    <th className="py-3">Booked</th>
 
-                                <th className="py-2 text-left">Start</th>
+                                    <th className="py-3">Available</th>
 
-                                <th className="py-2 text-left">End</th>
-
-                                <th className="py-2 text-left">Capacity</th>
-
-                                <th className="py-2 text-left">Booked</th>
-
-                                <th className="py-2 text-left">Available</th>
-
-                                <th className="py-2 text-left">Action</th>
-                            </tr>
-                        </thead>
-
-                        <tbody>
-                            {slots.map((slot) => (
-                                <tr key={slot.id} className="border-b">
-                                    <td className="py-2">{slot.role}</td>
-
-                                    <td className="py-2">
-                                        {new Date(
-                                            slot.start_time,
-                                        ).toLocaleString()}
-                                    </td>
-
-                                    <td className="py-2">
-                                        {new Date(
-                                            slot.end_time,
-                                        ).toLocaleString()}
-                                    </td>
-
-                                    <td className="py-2">{slot.capacity}</td>
-
-                                    <td className="py-2 text-green-600">
-                                        {slot.booked_count || 0}
-                                    </td>
-
-                                    <td className="py-2 text-blue-600">
-                                        {slot.available_seats ??
-                                            slot.capacity - slot.booked_count}
-                                    </td>
-
-                                    <td className="py-2">
-                                        <button
-                                            onClick={() =>
-                                                handleDeleteSlot(slot.id)
-                                            }
-                                            disabled={deletingId === slot.id}
-                                            className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded disabled:opacity-50"
-                                        >
-                                            {deletingId === slot.id
-                                                ? "Deleting..."
-                                                : "Delete"}
-                                        </button>
-                                    </td>
+                                    <th className="py-3">Action</th>
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                )}
+                            </thead>
+
+                            <tbody>
+                                {slots.map((slot) => {
+                                    const available =
+                                        slot.available_seats ??
+                                        slot.capacity - slot.booked_count;
+
+                                    return (
+                                        <tr
+                                            key={slot.id}
+                                            className="border-b hover:bg-gray-50"
+                                        >
+                                            <td className="py-3">
+                                                {slot.role}
+                                            </td>
+
+                                            <td className="py-3">
+                                                {new Date(
+                                                    slot.start_time,
+                                                ).toLocaleString()}
+                                            </td>
+
+                                            <td className="py-3">
+                                                {new Date(
+                                                    slot.end_time,
+                                                ).toLocaleString()}
+                                            </td>
+
+                                            <td className="py-3">
+                                                {slot.capacity}
+                                            </td>
+
+                                            <td className="py-3 text-green-600">
+                                                {slot.booked_count || 0}
+                                            </td>
+
+                                            <td className="py-3 text-blue-600">
+                                                {available}
+                                            </td>
+
+                                            <td className="py-3">
+                                                <button
+                                                    onClick={() =>
+                                                        handleDeleteSlot(
+                                                            slot.id,
+                                                        )
+                                                    }
+                                                    disabled={
+                                                        deletingId === slot.id
+                                                    }
+                                                    className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded disabled:opacity-50"
+                                                >
+                                                    {deletingId === slot.id
+                                                        ? "Deleting..."
+                                                        : "Delete"}
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    )}
+                </div>
             </div>
         </div>
     );
