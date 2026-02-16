@@ -1,221 +1,249 @@
 import React, { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import api from "../api/axios";
-import { toast } from "react-toastify";
 import Loader from "../components/Loader";
+import { toast } from "react-toastify";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
 function RecruiterDashboard() {
     const navigate = useNavigate();
-
-    const { user, logout } = useAuth();
+    const { logout } = useAuth();
 
     const [slots, setSlots] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [deletingId, setDeletingId] = useState(null);
 
+    const [waitlistModal, setWaitlistModal] = useState(false);
+    const [waitlistData, setWaitlistData] = useState([]);
+    const [selectedSlotRole, setSelectedSlotRole] = useState("");
+
+    // store waitlist counts per slot
+    const [waitlistCounts, setWaitlistCounts] = useState({});
+
+    //------------------------------------------------
     useEffect(() => {
         fetchSlots();
     }, []);
 
+    //------------------------------------------------
     const fetchSlots = async () => {
         try {
-            setLoading(true);
-
             const res = await api.get("/slots");
 
             if (res.data.success) {
-                setSlots(res.data.data);
-            } else {
-                toast.error("Failed to load slots");
+                const slotData = res.data.data;
+                setSlots(slotData);
+
+                // fetch waitlist counts for each slot
+                fetchAllWaitlistCounts(slotData);
             }
         } catch (err) {
-            console.error(err);
-
-            toast.error(err.response?.data?.message || "Failed to fetch slots");
+            toast.error("Failed to load slots");
         } finally {
             setLoading(false);
         }
     };
 
-    const handleDeleteSlot = async (slotId) => {
-        if (!window.confirm("Delete this slot?")) return;
-
+    //------------------------------------------------
+    const fetchAllWaitlistCounts = async (slotData) => {
         try {
-            setDeletingId(slotId);
+            const counts = {};
 
-            await api.delete(`/slots/${slotId}`);
+            await Promise.all(
+                slotData.map(async (slot) => {
+                    const res = await api.get(`/waitlist/${slot.id}`);
 
-            setSlots((prev) => prev.filter((slot) => slot.id !== slotId));
+                    if (res.data.success) {
+                        counts[slot.id] = res.data.data.length;
+                    } else {
+                        counts[slot.id] = 0;
+                    }
+                }),
+            );
 
-            toast.success("Slot deleted successfully");
+            setWaitlistCounts(counts);
         } catch (err) {
             console.error(err);
-
-            toast.error(err.response?.data?.message || "Delete failed");
-        } finally {
-            setDeletingId(null);
         }
     };
 
-    const totalSlots = slots.length;
+    //------------------------------------------------
+    const handleDelete = async (slotId) => {
+        if (!window.confirm("Delete this slot?")) return;
 
-    const totalBookings = slots.reduce(
-        (sum, slot) => sum + (slot.booked_count || 0),
-        0,
-    );
+        try {
+            await api.delete(`/slots/${slotId}`);
 
-    const availableSeats = slots.reduce(
-        (sum, slot) =>
-            sum + (slot.available_seats ?? slot.capacity - slot.booked_count),
-        0,
-    );
+            toast.success("Slot deleted");
 
-    if (loading) {
-        return <Loader />;
-    }
+            fetchSlots();
+        } catch (err) {
+            toast.error(err.response?.data?.message || "Delete failed");
+        }
+    };
 
+    //------------------------------------------------
+    const handleViewWaitlist = async (slotId, role) => {
+        try {
+            const res = await api.get(`/waitlist/${slotId}`);
+
+            if (res.data.success) {
+                setWaitlistData(res.data.data);
+                setSelectedSlotRole(role);
+                setWaitlistModal(true);
+            }
+        } catch (err) {
+            toast.error("Failed to load waitlist");
+        }
+    };
+
+    //------------------------------------------------
+    if (loading) return <Loader />;
+
+    //------------------------------------------------
     return (
-        <div className="min-h-screen bg-gray-100">
-            {/* Header */}
-            <div className="bg-white shadow p-4 flex justify-between items-center">
+        <div className="min-h-screen bg-gray-100 p-6">
+            {/* HEADER */}
+            <div className="flex justify-between mb-6">
                 <h1 className="text-2xl font-bold">Recruiter Dashboard</h1>
 
                 <div className="flex gap-3">
                     <button
                         onClick={() => navigate("/create-slot")}
-                        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
+                        className="bg-blue-600 text-white px-4 py-2 rounded"
                     >
                         Create Slot
                     </button>
 
                     <button
                         onClick={logout}
-                        className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded"
+                        className="bg-red-500 text-white px-4 py-2 rounded"
                     >
                         Logout
                     </button>
                 </div>
             </div>
 
-            {/* Welcome */}
-            <div className="p-6">
-                <h2 className="text-lg font-semibold mb-6">
-                    Welcome, {user?.email}
-                </h2>
+            {/* TABLE */}
+            <div className="bg-white p-6 rounded shadow">
+                <h2 className="text-xl font-bold mb-4">All Slots</h2>
 
-                {/* Stats */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                    <div className="bg-white p-6 rounded shadow">
-                        <p className="text-gray-500">Total Slots</p>
-                        <p className="text-2xl font-bold">{totalSlots}</p>
-                    </div>
+                <table className="w-full">
+                    <thead>
+                        <tr className="border-b text-left">
+                            <th>Role</th>
+                            <th>Start</th>
+                            <th>End</th>
+                            <th>Capacity</th>
+                            <th>Booked</th>
 
-                    <div className="bg-white p-6 rounded shadow">
-                        <p className="text-gray-500">Total Bookings</p>
-                        <p className="text-2xl font-bold text-green-600">
-                            {totalBookings}
-                        </p>
-                    </div>
+                            {/* NEW WAITLIST COUNT COLUMN */}
+                            <th>Waitlist</th>
 
-                    <div className="bg-white p-6 rounded shadow">
-                        <p className="text-gray-500">Available Seats</p>
-                        <p className="text-2xl font-bold text-purple-600">
-                            {availableSeats}
-                        </p>
-                    </div>
-                </div>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
 
-                {/* Slots Table */}
-                <div className="bg-white rounded shadow p-6">
-                    <h2 className="text-xl font-bold mb-4">All Slots</h2>
+                    <tbody>
+                        {slots.map((slot) => {
+                            const waitlistCount = waitlistCounts[slot.id] || 0;
 
-                    {slots.length === 0 ? (
-                        <p className="text-gray-500">No slots created yet</p>
-                    ) : (
-                        <table className="w-full">
-                            <thead>
-                                <tr className="border-b text-left">
-                                    <th className="py-3">Role</th>
+                            return (
+                                <tr key={slot.id} className="border-b">
+                                    <td>{slot.role}</td>
 
-                                    <th className="py-3">Start</th>
+                                    <td>
+                                        {new Date(
+                                            slot.start_time,
+                                        ).toLocaleString()}
+                                    </td>
 
-                                    <th className="py-3">End</th>
+                                    <td>
+                                        {new Date(
+                                            slot.end_time,
+                                        ).toLocaleString()}
+                                    </td>
 
-                                    <th className="py-3">Capacity</th>
+                                    <td>{slot.capacity}</td>
 
-                                    <th className="py-3">Booked</th>
+                                    <td>{slot.booked_count}</td>
 
-                                    <th className="py-3">Available</th>
+                                    {/* WAITLIST COUNT DISPLAY */}
+                                    <td className="font-semibold text-yellow-600">
+                                        {waitlistCount}
+                                    </td>
 
-                                    <th className="py-3">Action</th>
-                                </tr>
-                            </thead>
+                                    {/* ACTION BUTTONS */}
+                                    <td className="flex gap-2 py-2">
+                                        {waitlistCount > 0 ? (
+                                            <button
+                                                onClick={() =>
+                                                    handleViewWaitlist(
+                                                        slot.id,
+                                                        slot.role,
+                                                    )
+                                                }
+                                                className="bg-yellow-500 text-white px-3 py-1 rounded"
+                                            >
+                                                View Waitlist
+                                            </button>
+                                        ) : (
+                                            <button
+                                                disabled
+                                                className="bg-gray-400 text-white px-3 py-1 rounded cursor-not-allowed"
+                                            >
+                                                No Waitlist
+                                            </button>
+                                        )}
 
-                            <tbody>
-                                {slots.map((slot) => {
-                                    const available =
-                                        slot.available_seats ??
-                                        slot.capacity - slot.booked_count;
-
-                                    return (
-                                        <tr
-                                            key={slot.id}
-                                            className="border-b hover:bg-gray-50"
+                                        <button
+                                            onClick={() =>
+                                                handleDelete(slot.id)
+                                            }
+                                            className="bg-red-500 text-white px-3 py-1 rounded"
                                         >
-                                            <td className="py-3">
-                                                {slot.role}
-                                            </td>
-
-                                            <td className="py-3">
-                                                {new Date(
-                                                    slot.start_time,
-                                                ).toLocaleString()}
-                                            </td>
-
-                                            <td className="py-3">
-                                                {new Date(
-                                                    slot.end_time,
-                                                ).toLocaleString()}
-                                            </td>
-
-                                            <td className="py-3">
-                                                {slot.capacity}
-                                            </td>
-
-                                            <td className="py-3 text-green-600">
-                                                {slot.booked_count || 0}
-                                            </td>
-
-                                            <td className="py-3 text-blue-600">
-                                                {available}
-                                            </td>
-
-                                            <td className="py-3">
-                                                <button
-                                                    onClick={() =>
-                                                        handleDeleteSlot(
-                                                            slot.id,
-                                                        )
-                                                    }
-                                                    disabled={
-                                                        deletingId === slot.id
-                                                    }
-                                                    className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded disabled:opacity-50"
-                                                >
-                                                    {deletingId === slot.id
-                                                        ? "Deleting..."
-                                                        : "Delete"}
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
-                    )}
-                </div>
+                                            Delete
+                                        </button>
+                                    </td>
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                </table>
             </div>
+
+            {/* WAITLIST MODAL */}
+            {waitlistModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-40 flex justify-center items-center">
+                    <div className="bg-white p-6 rounded shadow w-96">
+                        <h2 className="text-xl font-bold mb-4">
+                            Waitlist — {selectedSlotRole}
+                        </h2>
+
+                        {waitlistData.length === 0 ? (
+                            <p>No candidates in waitlist</p>
+                        ) : (
+                            <ul className="space-y-2">
+                                {waitlistData.map((c, index) => (
+                                    <li
+                                        key={c.id}
+                                        className="border p-2 rounded"
+                                    >
+                                        #{index + 1} —{" "}
+                                        {c.email || c.candidate_id}
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+
+                        <button
+                            onClick={() => setWaitlistModal(false)}
+                            className="mt-4 bg-gray-500 text-white px-4 py-2 rounded"
+                        >
+                            Close
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

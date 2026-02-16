@@ -71,16 +71,20 @@ export const getAllSlotsService = async () => {
     const result = await pool.query(
         `
         SELECT
-            id,
-            interviewer_id,
-            role,
-            start_time,
-            end_time,
-            capacity,
-            booked_count,
-            (capacity - booked_count) AS available_seats
-        FROM slots
-        ORDER BY start_time ASC
+            s.id,
+            s.interviewer_id,
+            s.role,
+            s.start_time,
+            s.end_time,
+            s.capacity,
+            s.booked_count,
+            (s.capacity - s.booked_count) AS available_seats,
+            COUNT(w.id) AS waitlist_count
+        FROM slots s
+        LEFT JOIN waitlist w
+        ON s.id = w.slot_id
+        GROUP BY s.id
+        ORDER BY s.start_time ASC
         `,
     );
 

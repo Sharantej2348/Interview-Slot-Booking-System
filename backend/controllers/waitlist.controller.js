@@ -1,6 +1,7 @@
 import {
     joinWaitlistService,
     getWaitlistBySlotService,
+    getMyWaitlistService,
 } from "../services/waitlist.service.js";
 
 export const joinWaitlist = async (req, res) => {
@@ -44,6 +45,26 @@ export const getWaitlistBySlot = async (req, res) => {
             data: waitlist,
         });
     } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: error.message,
+        });
+    }
+};
+
+export const getMyWaitlist = async (req, res) => {
+    try {
+        const candidateId = req.user.userId;
+
+        const waitlist = await getMyWaitlistService(candidateId);
+
+        res.json({
+            success: true,
+            data: waitlist,
+        });
+    } catch (error) {
+        console.error("GET MY WAITLIST ERROR:", error);
+
         res.status(500).json({
             success: false,
             message: error.message,

@@ -15,6 +15,7 @@ import MyBookings from "./pages/MyBookings";
 
 import ProtectedRoute from "./components/ProtectedRoutes";
 import NavBar from "./components/NavBar";
+import MyWaitlist from "./pages/MyWaitlist";
 
 import { useAuth } from "./context/AuthContext";
 
@@ -65,6 +66,15 @@ function App() {
                     element={
                         <ProtectedRoute role="candidate">
                             <MyBookings />
+                        </ProtectedRoute>
+                    }
+                />
+
+                <Route
+                    path="/my-waitlist"
+                    element={
+                        <ProtectedRoute allowedRoles={["candidate"]}>
+                            <MyWaitlist />
                         </ProtectedRoute>
                     }
                 />

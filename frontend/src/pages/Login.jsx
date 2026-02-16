@@ -7,7 +7,7 @@ import { useAuth } from "../context/AuthContext";
 function Login() {
     const navigate = useNavigate();
 
-    const { login } = useAuth(); // ✅ IMPORTANT
+    const { login } = useAuth();
 
     const [form, setForm] = useState({
         email: "",
@@ -41,21 +41,11 @@ function Login() {
 
             const token = res.data.token;
 
-            //--------------------------------------------------
-            // ✅ Update AuthContext (CRITICAL FIX)
-            //--------------------------------------------------
             login(token);
 
             toast.success("Login successful");
 
-            //--------------------------------------------------
-            // Decode role from token
-            //--------------------------------------------------
             const decoded = JSON.parse(atob(token.split(".")[1]));
-
-            //--------------------------------------------------
-            // Navigate based on role
-            //--------------------------------------------------
             if (decoded.role === "candidate") {
                 navigate("/candidate-dashboard", {
                     replace: true,

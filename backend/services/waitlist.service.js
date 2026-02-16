@@ -91,19 +91,29 @@ export const getWaitlistBySlotService = async (slotId) => {
     const result = await pool.query(
         `
         SELECT
-            id,
-            slot_id,
-            candidate_id,
-            created_at
-        FROM waitlist
-        WHERE slot_id=$1
-        ORDER BY created_at ASC
+            w.id,
+            w.slot_id,
+            w.created_at,
+
+            u.id AS candidate_id,
+            u.email,
+            u.name
+
+        FROM waitlist w
+
+        JOIN users u
+        ON w.candidate_id = u.id
+
+        WHERE w.slot_id = $1
+
+        ORDER BY w.created_at ASC
         `,
         [slotId],
     );
 
     return result.rows;
 };
+
 
 export const promoteFromWaitlistService = async (slotId, client) => {
     /*
@@ -166,4 +176,32 @@ export const promoteFromWaitlistService = async (slotId, client) => {
         `,
         [slotId],
     );
+};
+
+export const getMyWaitlistService = async (candidateId) => {
+    const result = await pool.query(
+        `
+        SELECT
+            w.id,
+            w.created_at,
+
+            s.id AS slot_id,
+            s.role,
+            s.start_time,
+            s.end_time,
+            s.interviewer_id
+
+        FROM waitlist w
+
+        JOIN slots s
+        ON w.slot_id = s.id
+
+        WHERE w.candidate_id = $1
+
+        ORDER BY s.start_time ASC
+        `,
+        [candidateId],
+    );
+
+    return result.rows;
 };
