@@ -114,7 +114,6 @@ export const getWaitlistBySlotService = async (slotId) => {
     return result.rows;
 };
 
-
 export const promoteFromWaitlistService = async (slotId, client) => {
     /*
     Get first waitlisted candidate
@@ -183,13 +182,20 @@ export const getMyWaitlistService = async (candidateId) => {
         `
         SELECT
             w.id,
+            w.slot_id,
             w.created_at,
 
-            s.id AS slot_id,
             s.role,
             s.start_time,
             s.end_time,
-            s.interviewer_id
+            s.interviewer_id,
+
+            (
+                SELECT COUNT(*) 
+                FROM waitlist w2
+                WHERE w2.slot_id = w.slot_id
+                AND w2.created_at <= w.created_at
+            ) AS position
 
         FROM waitlist w
 
@@ -204,4 +210,50 @@ export const getMyWaitlistService = async (candidateId) => {
     );
 
     return result.rows;
+};
+
+export const leaveWaitlistService = async ({ slotId, candidateId }) => {
+    const client = await pool.connect();
+
+    try {
+        await client.query("BEGIN");
+
+        /*
+        Check if candidate is in waitlist
+        */
+        const check = await client.query(
+            `
+            SELECT id
+            FROM waitlist
+            WHERE slot_id = $1
+            AND candidate_id = $2
+            `,
+            [slotId, candidateId],
+        );
+
+        if (check.rows.length === 0) {
+            throw new Error("You are not in waitlist for this slot");
+        }
+
+        /*
+        Delete waitlist entry
+        */
+        await client.query(
+            `
+            DELETE FROM waitlist
+            WHERE slot_id = $1
+            AND candidate_id = $2
+            `,
+            [slotId, candidateId],
+        );
+
+        await client.query("COMMIT");
+
+        return true;
+    } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+    } finally {
+        client.release();
+    }
 };

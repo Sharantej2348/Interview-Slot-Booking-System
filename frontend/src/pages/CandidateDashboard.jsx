@@ -10,73 +10,67 @@ function CandidateDashboard() {
     const { user } = useAuth();
 
     const [slots, setSlots] = useState([]);
-
-    const [bookedSlots, setBookedSlots] = useState(new Set());
     const [waitlistedSlots, setWaitlistedSlots] = useState(new Set());
+    const [bookedSlots, setBookedSlots] = useState(new Set());
 
     const [loading, setLoading] = useState(true);
 
     const [bookingLoadingId, setBookingLoadingId] = useState(null);
     const [waitlistLoadingId, setWaitlistLoadingId] = useState(null);
+    const [leaveWaitlistLoadingId, setLeaveWaitlistLoadingId] = useState(null);
 
+    //--------------------------------------------------
     useEffect(() => {
         if (user?.id) {
-            loadDashboardData();
+            fetchAllData();
         }
     }, [user]);
 
-    const loadDashboardData = async () => {
+    //--------------------------------------------------
+    const fetchAllData = async () => {
         try {
             setLoading(true);
 
-            await Promise.all([fetchSlots(), fetchBookings(), fetchWaitlist()]);
-        } catch (error) {
-            console.error(error);
+            await Promise.all([fetchSlots(), fetchWaitlist(), fetchBookings()]);
         } finally {
             setLoading(false);
         }
     };
 
+    //--------------------------------------------------
     const fetchSlots = async () => {
-        try {
-            const res = await api.get("/slots");
+        const res = await api.get("/slots");
 
-            if (res.data.success) {
-                setSlots(res.data.data);
-            }
-        } catch {
-            toast.error("Failed to load slots");
+        if (res.data.success) {
+            setSlots(res.data.data);
         }
     };
 
+    //--------------------------------------------------
     const fetchBookings = async () => {
-        try {
-            const res = await api.get("/bookings/my-bookings");
+        const res = await api.get("/bookings/my-bookings");
 
-            if (res.data.success) {
-                const booked = new Set(res.data.data.map((b) => b.slot_id));
+        if (res.data.success) {
+            const ids = new Set(res.data.data.map((b) => b.slot_id));
 
-                setBookedSlots(booked);
-            }
-        } catch (error) {
-            console.error(error);
+            setBookedSlots(ids);
         }
     };
 
+    //--------------------------------------------------
     const fetchWaitlist = async () => {
-        try {
-            const res = await api.get("/waitlist/my-waitlist");
+        const res = await api.get("/waitlist/my-waitlist");
 
-            if (res.data.success) {
-                const waitlisted = new Set(res.data.data.map((w) => w.slot_id));
+        if (res.data.success) {
+            const ids = new Set(res.data.data.map((w) => w.slot_id));
 
-                setWaitlistedSlots(waitlisted);
-            }
-        } catch (error) {
-            console.error(error);
+            setWaitlistedSlots(ids);
         }
     };
 
+    //--------------------------------------------------
+    // BOOK SLOT
+    //--------------------------------------------------
     const handleBooking = async (slotId) => {
         try {
             setBookingLoadingId(slotId);
@@ -88,41 +82,73 @@ function CandidateDashboard() {
 
             toast.success("Slot booked successfully");
 
-            await loadDashboardData();
-        } catch (error) {
-            toast.error(error.response?.data?.message || "Booking failed");
+            fetchAllData();
+        } catch (err) {
+            toast.error(err.response?.data?.message);
         } finally {
             setBookingLoadingId(null);
         }
     };
 
+    //--------------------------------------------------
+    // JOIN WAITLIST
+    //--------------------------------------------------
     const handleJoinWaitlist = async (slotId) => {
         try {
             setWaitlistLoadingId(slotId);
 
-            await api.post("/waitlist", {
-                slotId,
-            });
+            await api.post("/waitlist", { slotId });
 
             toast.success("Added to waitlist");
 
-            await loadDashboardData();
-        } catch (error) {
-            toast.error(error.response?.data?.message || "Waitlist failed");
+            fetchWaitlist();
+        } catch (err) {
+            toast.error(err.response?.data?.message);
         } finally {
             setWaitlistLoadingId(null);
         }
     };
 
+    //--------------------------------------------------
+    // LEAVE WAITLIST  ⭐ NEW FEATURE
+    //--------------------------------------------------
+    const handleLeaveWaitlist = async (slotId) => {
+        try {
+            setLeaveWaitlistLoadingId(slotId);
+
+            await api.delete(`/waitlist/${slotId}`);
+
+            toast.success("Removed from waitlist");
+
+            setWaitlistedSlots((prev) => {
+                const updated = new Set(prev);
+                updated.delete(slotId);
+                return updated;
+            });
+        } catch (err) {
+            toast.error(err.response?.data?.message);
+        } finally {
+            setLeaveWaitlistLoadingId(null);
+        }
+    };
+
+    //--------------------------------------------------
     if (loading) return <Loader />;
 
+    //--------------------------------------------------
     return (
         <div className="min-h-screen bg-gray-100 p-6">
-            {/* HEADER */}
             <div className="flex justify-between mb-6">
                 <h1 className="text-2xl font-bold">Candidate Dashboard</h1>
 
                 <div className="flex gap-3">
+                    <button
+                        onClick={() => navigate("/candidate-calendar")}
+                        className="bg-purple-600 text-white px-4 py-2 rounded"
+                    >
+                        Calendar View
+                    </button>
+
                     <button
                         onClick={() => navigate("/my-bookings")}
                         className="bg-blue-600 text-white px-4 py-2 rounded"
@@ -139,7 +165,6 @@ function CandidateDashboard() {
                 </div>
             </div>
 
-            {/* SLOT LIST */}
             <div className="grid gap-4">
                 {slots.map((slot) => {
                     const availableSeats = slot.capacity - slot.booked_count;
@@ -166,45 +191,33 @@ function CandidateDashboard() {
 
                             <p>Available Seats: {availableSeats}</p>
 
-                            {/* BOOKED STATUS */}
+                            {/* BOOKED */}
                             {isBooked && (
                                 <button
                                     disabled
-                                    className="mt-3 bg-green-400 text-white px-4 py-2 rounded cursor-not-allowed"
+                                    className="mt-3 bg-green-400 text-white px-4 py-2 rounded"
                                 >
                                     Booked
                                 </button>
                             )}
 
-                            {/* WAITLISTED STATUS */}
-                            {!isBooked && isWaitlisted && (
+                            {/* BOOK SLOT */}
+                            {!isBooked && availableSeats > 0 && (
                                 <button
-                                    disabled
-                                    className="mt-3 bg-gray-400 text-white px-4 py-2 rounded cursor-not-allowed"
+                                    onClick={() => handleBooking(slot.id)}
+                                    disabled={bookingLoadingId === slot.id}
+                                    className="mt-3 bg-green-600 text-white px-4 py-2 rounded"
                                 >
-                                    Waitlisted
+                                    {bookingLoadingId === slot.id
+                                        ? "Booking..."
+                                        : "Book Slot"}
                                 </button>
                             )}
 
-                            {/* BOOK BUTTON */}
+                            {/* JOIN WAITLIST */}
                             {!isBooked &&
-                                !isWaitlisted &&
-                                availableSeats > 0 && (
-                                    <button
-                                        onClick={() => handleBooking(slot.id)}
-                                        disabled={bookingLoadingId === slot.id}
-                                        className="mt-3 bg-green-600 text-white px-4 py-2 rounded"
-                                    >
-                                        {bookingLoadingId === slot.id
-                                            ? "Booking..."
-                                            : "Book Slot"}
-                                    </button>
-                                )}
-
-                            {/* WAITLIST BUTTON */}
-                            {!isBooked &&
-                                !isWaitlisted &&
-                                availableSeats === 0 && (
+                                availableSeats === 0 &&
+                                !isWaitlisted && (
                                     <button
                                         onClick={() =>
                                             handleJoinWaitlist(slot.id)
@@ -217,6 +230,21 @@ function CandidateDashboard() {
                                             : "Join Waitlist"}
                                     </button>
                                 )}
+
+                            {/* LEAVE WAITLIST ⭐ */}
+                            {isWaitlisted && (
+                                <button
+                                    onClick={() => handleLeaveWaitlist(slot.id)}
+                                    disabled={
+                                        leaveWaitlistLoadingId === slot.id
+                                    }
+                                    className="mt-3 bg-red-500 text-white px-4 py-2 rounded"
+                                >
+                                    {leaveWaitlistLoadingId === slot.id
+                                        ? "Leaving..."
+                                        : "Leave Waitlist"}
+                                </button>
+                            )}
                         </div>
                     );
                 })}
