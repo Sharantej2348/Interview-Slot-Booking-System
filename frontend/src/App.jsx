@@ -17,6 +17,7 @@ import ProtectedRoute from "./components/ProtectedRoutes";
 import NavBar from "./components/NavBar";
 import MyWaitlist from "./pages/MyWaitlist";
 import CandidateCalendar from "./pages/CandidateCalendar";
+import RecruiterCalendar from "./pages/RecruiterCalendar";
 
 import { useAuth } from "./context/AuthContext";
 
@@ -104,6 +105,15 @@ function App() {
                     element={
                         <ProtectedRoute role="recruiter">
                             <CreateSlotPage />
+                        </ProtectedRoute>
+                    }
+                />
+
+                <Route
+                    path="/recruiter-calendar"
+                    element={
+                        <ProtectedRoute role="recruiter">
+                            <RecruiterCalendar />
                         </ProtectedRoute>
                     }
                 />

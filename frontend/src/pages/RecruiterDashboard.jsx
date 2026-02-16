@@ -130,7 +130,7 @@ function RecruiterDashboard() {
             <div className="flex justify-between mb-6">
                 <h1 className="text-2xl font-bold">Recruiter Dashboard</h1>
 
-                {/* <div className="flex gap-3">
+                <div className="flex gap-3">
                     <button
                         onClick={() => navigate("/create-slot")}
                         className="bg-blue-600 text-white px-4 py-2 rounded"
@@ -139,12 +139,19 @@ function RecruiterDashboard() {
                     </button>
 
                     <button
+                        onClick={() => navigate("/recruiter-calendar")}
+                        className="bg-purple-600 text-white px-4 py-2 rounded"
+                    >
+                        Calendar View
+                    </button>
+
+                    <button
                         onClick={logout}
                         className="bg-red-500 text-white px-4 py-2 rounded"
                     >
                         Logout
                     </button>
-                </div> */}
+                </div>
             </div>
 
             {/* TABLE */}
