@@ -138,3 +138,120 @@ export const deleteSlotService = async (slotId, recruiterId) => {
         client.release();
     }
 };
+
+export const rescheduleSlotService = async ({
+    slotId,
+    recruiterId,
+    startTime,
+    endTime,
+}) => {
+    const client = await pool.connect();
+
+    try {
+        await client.query("BEGIN");
+
+        //------------------------------------------------
+        // 1. Lock and validate slot ownership
+        //------------------------------------------------
+        const slotResult = await client.query(
+            `
+            SELECT *
+            FROM slots
+            WHERE id = $1
+            AND interviewer_id = $2
+            FOR UPDATE
+            `,
+            [slotId, recruiterId],
+        );
+
+        if (slotResult.rows.length === 0)
+            throw new Error("Slot not found or unauthorized");
+
+        const existingSlot = slotResult.rows[0];
+
+        //------------------------------------------------
+        // 2. Validate time range
+        //------------------------------------------------
+        if (new Date(startTime) >= new Date(endTime))
+            throw new Error("Invalid time range");
+
+        //------------------------------------------------
+        // 3. Prevent past scheduling
+        //------------------------------------------------
+        if (new Date(startTime) < new Date())
+            throw new Error("Cannot reschedule to past time");
+
+        //------------------------------------------------
+        // 4. Prevent conflict with other slots
+        //------------------------------------------------
+        const conflictCheck = await client.query(
+            `
+            SELECT id
+            FROM slots
+            WHERE interviewer_id = $1
+            AND id != $2
+            AND start_time < $3
+            AND end_time > $4
+            `,
+            [recruiterId, slotId, endTime, startTime],
+        );
+
+        if (conflictCheck.rows.length > 0)
+            throw new Error("Schedule conflict with another slot");
+
+        //------------------------------------------------
+        // 5. Protect existing bookings
+        //------------------------------------------------
+        const bookingCheck = await client.query(
+            `
+            SELECT COUNT(*) as count
+            FROM bookings
+            WHERE slot_id = $1
+            `,
+            [slotId],
+        );
+
+        const bookingCount = parseInt(bookingCheck.rows[0].count);
+
+        if (bookingCount > 0) {
+            const oldStart = new Date(existingSlot.start_time);
+            const oldEnd = new Date(existingSlot.end_time);
+
+            const newStart = new Date(startTime);
+            const newEnd = new Date(endTime);
+
+            const shiftHours = Math.abs(newStart - oldStart) / (1000 * 60 * 60);
+
+            /*
+            Business rule: restrict excessive change
+            */
+            if (shiftHours > 4)
+                throw new Error(
+                    "Cannot reschedule significantly — candidates already booked",
+                );
+        }
+
+        //------------------------------------------------
+        // 6. Update slot
+        //------------------------------------------------
+        const updatedSlot = await client.query(
+            `
+            UPDATE slots
+            SET start_time = $1,
+                end_time   = $2
+            WHERE id = $3
+            RETURNING *
+            `,
+            [startTime, endTime, slotId],
+        );
+
+        await client.query("COMMIT");
+
+        return updatedSlot.rows[0];
+    } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+    } finally {
+        client.release();
+    }
+};

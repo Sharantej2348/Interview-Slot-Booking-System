@@ -4,6 +4,7 @@ import Loader from "../components/Loader";
 import { toast } from "react-toastify";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import RescheduleModal from "../components/RescheduleModal";
 
 function RecruiterDashboard() {
     const navigate = useNavigate();
@@ -12,11 +13,22 @@ function RecruiterDashboard() {
     const [slots, setSlots] = useState([]);
     const [loading, setLoading] = useState(true);
 
+    //------------------------------------------------
+    // Waitlist Modal
+    //------------------------------------------------
     const [waitlistModal, setWaitlistModal] = useState(false);
     const [waitlistData, setWaitlistData] = useState([]);
     const [selectedSlotRole, setSelectedSlotRole] = useState("");
 
-    // store waitlist counts per slot
+    //------------------------------------------------
+    // Reschedule Modal
+    //------------------------------------------------
+    const [rescheduleModal, setRescheduleModal] = useState(false);
+    const [selectedSlot, setSelectedSlot] = useState(null);
+
+    //------------------------------------------------
+    // Waitlist counts
+    //------------------------------------------------
     const [waitlistCounts, setWaitlistCounts] = useState({});
 
     //------------------------------------------------
@@ -27,16 +39,17 @@ function RecruiterDashboard() {
     //------------------------------------------------
     const fetchSlots = async () => {
         try {
+            setLoading(true);
+
             const res = await api.get("/slots");
 
             if (res.data.success) {
                 const slotData = res.data.data;
                 setSlots(slotData);
 
-                // fetch waitlist counts for each slot
-                fetchAllWaitlistCounts(slotData);
+                fetchWaitlistCounts(slotData);
             }
-        } catch (err) {
+        } catch {
             toast.error("Failed to load slots");
         } finally {
             setLoading(false);
@@ -44,17 +57,16 @@ function RecruiterDashboard() {
     };
 
     //------------------------------------------------
-    const fetchAllWaitlistCounts = async (slotData) => {
+    const fetchWaitlistCounts = async (slotData) => {
         try {
             const counts = {};
 
             await Promise.all(
                 slotData.map(async (slot) => {
-                    const res = await api.get(`/waitlist/${slot.id}`);
-
-                    if (res.data.success) {
+                    try {
+                        const res = await api.get(`/waitlist/${slot.id}`);
                         counts[slot.id] = res.data.data.length;
-                    } else {
+                    } catch {
                         counts[slot.id] = 0;
                     }
                 }),
@@ -66,6 +78,8 @@ function RecruiterDashboard() {
         }
     };
 
+    //------------------------------------------------
+    // DELETE SLOT
     //------------------------------------------------
     const handleDelete = async (slotId) => {
         if (!window.confirm("Delete this slot?")) return;
@@ -82,6 +96,8 @@ function RecruiterDashboard() {
     };
 
     //------------------------------------------------
+    // VIEW WAITLIST
+    //------------------------------------------------
     const handleViewWaitlist = async (slotId, role) => {
         try {
             const res = await api.get(`/waitlist/${slotId}`);
@@ -91,9 +107,17 @@ function RecruiterDashboard() {
                 setSelectedSlotRole(role);
                 setWaitlistModal(true);
             }
-        } catch (err) {
+        } catch {
             toast.error("Failed to load waitlist");
         }
+    };
+
+    //------------------------------------------------
+    // OPEN RESCHEDULE MODAL
+    //------------------------------------------------
+    const openRescheduleModal = (slot) => {
+        setSelectedSlot(slot);
+        setRescheduleModal(true);
     };
 
     //------------------------------------------------
@@ -106,7 +130,7 @@ function RecruiterDashboard() {
             <div className="flex justify-between mb-6">
                 <h1 className="text-2xl font-bold">Recruiter Dashboard</h1>
 
-                <div className="flex gap-3">
+                {/* <div className="flex gap-3">
                     <button
                         onClick={() => navigate("/create-slot")}
                         className="bg-blue-600 text-white px-4 py-2 rounded"
@@ -120,7 +144,7 @@ function RecruiterDashboard() {
                     >
                         Logout
                     </button>
-                </div>
+                </div> */}
             </div>
 
             {/* TABLE */}
@@ -135,10 +159,7 @@ function RecruiterDashboard() {
                             <th>End</th>
                             <th>Capacity</th>
                             <th>Booked</th>
-
-                            {/* NEW WAITLIST COUNT COLUMN */}
                             <th>Waitlist</th>
-
                             <th>Action</th>
                         </tr>
                     </thead>
@@ -167,12 +188,10 @@ function RecruiterDashboard() {
 
                                     <td>{slot.booked_count}</td>
 
-                                    {/* WAITLIST COUNT DISPLAY */}
-                                    <td className="font-semibold text-yellow-600">
+                                    <td className="text-yellow-600 font-semibold">
                                         {waitlistCount}
                                     </td>
 
-                                    {/* ACTION BUTTONS */}
                                     <td className="flex gap-2 py-2">
                                         {waitlistCount > 0 ? (
                                             <button
@@ -189,11 +208,20 @@ function RecruiterDashboard() {
                                         ) : (
                                             <button
                                                 disabled
-                                                className="bg-gray-400 text-white px-3 py-1 rounded cursor-not-allowed"
+                                                className="bg-gray-400 text-white px-3 py-1 rounded"
                                             >
                                                 No Waitlist
                                             </button>
                                         )}
+
+                                        <button
+                                            onClick={() =>
+                                                openRescheduleModal(slot)
+                                            }
+                                            className="bg-blue-500 text-white px-3 py-1 rounded"
+                                        >
+                                            Reschedule
+                                        </button>
 
                                         <button
                                             onClick={() =>
@@ -220,7 +248,7 @@ function RecruiterDashboard() {
                         </h2>
 
                         {waitlistData.length === 0 ? (
-                            <p>No candidates in waitlist</p>
+                            <p>No candidates</p>
                         ) : (
                             <ul className="space-y-2">
                                 {waitlistData.map((c, index) => (
@@ -243,6 +271,15 @@ function RecruiterDashboard() {
                         </button>
                     </div>
                 </div>
+            )}
+
+            {/* RESCHEDULE MODAL */}
+            {rescheduleModal && selectedSlot && (
+                <RescheduleModal
+                    slot={selectedSlot}
+                    onClose={() => setRescheduleModal(false)}
+                    onSuccess={fetchSlots}
+                />
             )}
         </div>
     );

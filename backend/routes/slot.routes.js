@@ -4,6 +4,7 @@ import {
     createSlot,
     getAllSlots,
     deleteSlot,
+    rescheduleSlot
 } from "../controllers/slot.controller.js";
 
 import { authenticate } from "../middlewares/auth.middleware.js";
@@ -21,5 +22,12 @@ router.get(
 );
 
 router.delete("/:slotId", authenticate, authorize(["recruiter"]), deleteSlot);
+
+router.put(
+    "/:slotId/reschedule",
+    authenticate,
+    authorize(["recruiter"]),
+    rescheduleSlot,
+);
 
 export default router;
