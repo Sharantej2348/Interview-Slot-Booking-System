@@ -1,3 +1,7 @@
+## 🎥 Demo Video
+
+[![Watch the demo](▶YouTube)](https://www.youtube.com/watch?v=JLqXBTVPmIU)
+
 # Interview Scheduler Platform
 
 A production-ready interview scheduling platform supporting recruiters and candidates, featuring slot management, booking, waitlist promotion, calendar views, and conflict-safe scheduling.
